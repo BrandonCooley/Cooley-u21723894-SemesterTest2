@@ -67,8 +67,20 @@ export function AuthProvider({ children }) {
           setUserRole('admin');
           setIsAdmin(true);
         }
+
+        if (userData.email.toLowerCase() === 'zii010817@gmail.com' && userData.role !== 'admin') 
+        {
+          await setDoc(doc(db, "users", uid), {
+            ...userData,
+            role: 'admin'
+          });
+          setUserRole('admin');
+          setIsAdmin(true)
+        }
+
       }
-    } catch (error) {
+    } 
+      catch (error) {
       console.error("Error fetching user role:", error);
     }
   }
