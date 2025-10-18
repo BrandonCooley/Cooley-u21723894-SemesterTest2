@@ -59,65 +59,82 @@ function CampusModel({ modelPath }) {
   const gltf = useGLTF(modelPath);
   const { camera, controls } = useThree();
   const [initialized, setInitialized] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (gltf && gltf.scene && !initialized) {
-      const scene = gltf.scene;
+    try {
+      if (gltf && gltf.scene && !initialized) {
+        const scene = gltf.scene;
 
-      // Figure out how big the model is
-      const box = new THREE.Box3().setFromObject(scene);
-      const min = box.min;
+        // Figure out how big the model is
+        const box = new THREE.Box3().setFromObject(scene);
+        const min = box.min;
 
-      // Move model so the bottom sits at ground level (y=0)
-      const yOffset = -min.y;
-      scene.position.y = yOffset;
+        // Move model so the bottom sits at ground level (y=0)
+        const yOffset = -min.y;
+        scene.position.y = yOffset;
 
-      // Recalculate size after moving it
-      const newBox = new THREE.Box3().setFromObject(scene);
-      const newCenter = newBox.getCenter(new THREE.Vector3());
-      const newSize = newBox.getSize(new THREE.Vector3());
+        // Recalculate size after moving it
+        const newBox = new THREE.Box3().setFromObject(scene);
+        const newCenter = newBox.getCenter(new THREE.Vector3());
+        const newSize = newBox.getSize(new THREE.Vector3());
 
-      // Calculate how far back the camera needs to be to see everything
-      const maxDim = Math.max(newSize.x, newSize.y, newSize.z);
-      const fov = camera.fov * (Math.PI / 180);
-      const distance = Math.abs(maxDim / Math.sin(fov / 2)) * 1.2;
+        // Calculate how far back the camera needs to be to see everything
+        const maxDim = Math.max(newSize.x, newSize.y, newSize.z);
+        const fov = camera.fov * (Math.PI / 180);
+        const distance = Math.abs(maxDim / Math.sin(fov / 2)) * 1.2;
 
-      // Put camera at an angle so you can see the 3D perspective
-      const newCameraPos = {
-        x: newCenter.x + distance * 0.5,
-        y: newCenter.y + distance * 0.8,
-        z: newCenter.z + distance * 0.5
-      };
+        // Put camera at an angle so you can see the 3D perspective
+        const newCameraPos = {
+          x: newCenter.x + distance * 0.5,
+          y: newCenter.y + distance * 0.8,
+          z: newCenter.z + distance * 0.5
+        };
 
-      camera.position.set(newCameraPos.x, newCameraPos.y, newCameraPos.z);
-      camera.lookAt(newCenter);
-      camera.updateProjectionMatrix();
+        camera.position.set(newCameraPos.x, newCameraPos.y, newCameraPos.z);
+        camera.lookAt(newCenter);
+        camera.updateProjectionMatrix();
 
-      // Make the controls focus on the center of the model
-      if (controls) {
-        controls.target.copy(newCenter);
-        controls.update();
-      }
+        // Make the controls focus on the center of the model
+        if (controls) {
+          controls.target.copy(newCenter);
+          controls.update();
+        }
 
-      // Go through all parts of the model and make sure they're visible with shadows
-      scene.traverse((child) => {
-        if (child.isMesh) {
-          child.castShadow = true;
-          child.receiveShadow = true;
+        // Go through all parts of the model and make sure they're visible with shadows
+        scene.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
 
-          if (child.material) {
-            child.material.needsUpdate = true;
-            // Fix any invisible materials
-            if (child.material.opacity !== undefined && child.material.opacity < 0.1) {
-              child.material.opacity = 1.0;
+            if (child.material) {
+              child.material.needsUpdate = true;
+              // Fix any invisible materials
+              if (child.material.opacity !== undefined && child.material.opacity < 0.1) {
+                child.material.opacity = 1.0;
+              }
             }
           }
-        }
-      });
+        });
 
-      setInitialized(true);
+        setInitialized(true);
+      }
+    } catch (err) {
+      console.error("Error loading model:", err);
+      setError(err.message);
     }
   }, [gltf, camera, controls, initialized]);
+
+  if (error) {
+    return (
+      <Html center>
+        <Box sx={{ color: 'error.main', textAlign: 'center' }}>
+          <Typography variant="h6">Error loading 3D model</Typography>
+          <Typography variant="body2">{error}</Typography>
+        </Box>
+      </Html>
+    );
+  }
 
   if (!gltf || !gltf.scene) {
     return null;
