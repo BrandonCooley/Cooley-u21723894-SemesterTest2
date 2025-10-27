@@ -1,6 +1,6 @@
 import React, { Suspense, useState, useEffect, useRef } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { OrbitControls, useGLTF, Html, PerspectiveCamera, Environment } from '@react-three/drei';
+import { OrbitControls, useGLTF, Html, PerspectiveCamera } from '@react-three/drei';
 import {
   Box,
   CircularProgress,
@@ -10,7 +10,6 @@ import {
   IconButton,
   Chip,
   Tooltip,
-  Slider,
   Stack,
   Dialog,
   DialogTitle,
@@ -39,7 +38,6 @@ import TuneIcon from '@mui/icons-material/Tune';
 import MapIcon from '@mui/icons-material/Map';
 import InfoIcon from '@mui/icons-material/Info';
 import CloseIcon from '@mui/icons-material/Close';
-import FilterAltIcon from '@mui/icons-material/FilterAlt';
 
 // Changes the sky color between day and night modes
 function SceneBackground({ isNight }) {
