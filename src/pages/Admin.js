@@ -4,24 +4,19 @@ import MainLayout from '../components/layout/MainLayout';
 import {
   Button, Typography, Container, Alert, Snackbar,
   Card, CardContent, CardHeader, Grid, Divider, Paper,
-  List, ListItem, ListItemText, ListItemIcon, Chip,
+  List, ListItem, ListItemText, Chip,
   Tabs, Tab, Box, Select, MenuItem, FormControl,
   Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import SettingsIcon from '@mui/icons-material/Settings';
-import StorageIcon from '@mui/icons-material/Storage';
 import PeopleIcon from '@mui/icons-material/People';
-import LayersIcon from '@mui/icons-material/Layers';
 import DatasetIcon from '@mui/icons-material/Dataset';
-import AssessmentIcon from '@mui/icons-material/Assessment';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { getAllUsers, updateUserRole } from '../services/adminService';
 import { useAuth } from '../contexts/AuthContext';
-import MapManager from './admin/MapManager';
 import DataManager from './admin/DataManager';
-import Analytics from './admin/Analytics';
 
 function TabPanel({ children, value, index }) {
   return (
@@ -129,9 +124,7 @@ export default function Admin() {
         <Box sx={{ borderBottom: 1, borderColor: 'divider', mt: 3, mb: 2 }}>
           <Tabs value={currentTab} onChange={(e, newValue) => setCurrentTab(newValue)}>
             <Tab icon={<SettingsIcon />} label="Overview" />
-            <Tab icon={<LayersIcon />} label="Map Layers" />
             <Tab icon={<DatasetIcon />} label="Data Manager" />
-            <Tab icon={<AssessmentIcon />} label="Analytics" />
           </Tabs>
         </Box>
 
@@ -139,7 +132,7 @@ export default function Admin() {
         <TabPanel value={currentTab} index={0}>
           <Grid container spacing={3}>
           {/* Admin Access Card */}
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12}>
             <Card>
               <CardHeader
                 avatar={<SettingsIcon color="primary" />}
@@ -163,42 +156,6 @@ export default function Admin() {
             </Card>
           </Grid>
 
-          {/* System Information Card */}
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardHeader
-                avatar={<StorageIcon color="success" />}
-                title="System Information"
-                subheader="Dashboard configuration and status"
-              />
-              <Divider />
-              <CardContent>
-                <List dense>
-                  <ListItem>
-                    <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
-                    <ListItemText
-                      primary="Firebase Backend"
-                      secondary="Connected and operational"
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
-                    <ListItemText
-                      primary="3D Campus Viewer"
-                      secondary="Active with GLTF model"
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
-                    <ListItemText
-                      primary="Sustainability Data"
-                      secondary="Real-time metrics available"
-                    />
-                  </ListItem>
-                </List>
-              </CardContent>
-            </Card>
-          </Grid>
 
           {/* User Management Card */}
           <Grid item xs={12}>
@@ -265,60 +222,12 @@ export default function Admin() {
             </Card>
           </Grid>
 
-          {/* Dashboard Features Info */}
-          <Grid item xs={12}>
-            <Card>
-              <CardHeader
-                title="Dashboard Features"
-                subheader="Available sustainability monitoring tools"
-              />
-              <Divider />
-              <CardContent>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-                      <Typography variant="h6" color="primary">Solar Energy</Typography>
-                      <Typography variant="body2">Roof potential tracking</Typography>
-                    </Paper>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-                      <Typography variant="h6" color="info.main">Water Conservation</Typography>
-                      <Typography variant="body2">Rainwater harvesting</Typography>
-                    </Paper>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-                      <Typography variant="h6" color="success.main">Green Spaces</Typography>
-                      <Typography variant="body2">Carbon offset analysis</Typography>
-                    </Paper>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-                      <Typography variant="h6" color="warning.main">Study Pods</Typography>
-                      <Typography variant="body2">Efficiency metrics</Typography>
-                    </Paper>
-                  </Grid>
-                </Grid>
-              </CardContent>
-            </Card>
-          </Grid>
         </Grid>
         </TabPanel>
 
-        {/* Map Layers Tab */}
-        <TabPanel value={currentTab} index={1}>
-          <MapManager />
-        </TabPanel>
-
         {/* Data Manager Tab */}
-        <TabPanel value={currentTab} index={2}>
+        <TabPanel value={currentTab} index={1}>
           <DataManager />
-        </TabPanel>
-
-        {/* Analytics Tab */}
-        <TabPanel value={currentTab} index={3}>
-          <Analytics />
         </TabPanel>
 
         {/* Role Change Confirmation Dialog */}

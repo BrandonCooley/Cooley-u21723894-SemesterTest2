@@ -389,10 +389,6 @@ export async function updateUserRole(userId, newRole, adminUserId) {
 // ============================================================================
 // AUDIT LOGGING
 // ============================================================================
-
-/**
- * Log admin actions for audit trail
- */
 export async function logAdminAction(action, resourceType, resourceId, userId, changes) {
   try {
     const logsRef = collection(db, 'audit-log');
@@ -409,10 +405,6 @@ export async function logAdminAction(action, resourceType, resourceId, userId, c
     // Don't throw - logging failures shouldn't break the main operation
   }
 }
-
-/**
- * Get audit logs with optional filtering
- */
 export async function getAuditLogs(filters = {}) {
   try {
     const logsRef = collection(db, 'audit-log');
@@ -444,10 +436,6 @@ export async function getAuditLogs(filters = {}) {
 // ============================================================================
 // ANALYTICS
 // ============================================================================
-
-/**
- * Get analytics data for admin dashboard
- */
 export async function getAnalytics() {
   try {
     // Get counts of various resources

@@ -21,12 +21,8 @@ import {
 } from '@mui/material';
 import MainLayout from '../components/layout/MainLayout';
 import {
-  greenSpaces
-} from '../services/sustainabilityData';
-import {
   findClosestBuilding,
   getSolarPanelConfig,
-  getFinancialAnalysis,
   getBuildingInfo
 } from '../services/solarApiService';
 import {
@@ -95,33 +91,74 @@ export default function Map2D() {
   // Initialize Google Maps
   useEffect(() => {
     let isMounted = true;
+    let scriptElement = null;
 
     // Load Google Maps script
     const loadGoogleMaps = () => {
-      if (window.google && window.google.maps) {
-        // Already loaded
-        initializeMap();
+      // Check if Google Maps is already loaded
+      if (window.google && window.google.maps && window.google.maps.Map) {
+        // Already loaded - check if it's fully initialized
+        if (window.google.maps.version) {
+          initializeMap();
+          return;
+        }
+      }
+
+      // Check if script is already being loaded
+      const existingScript = document.querySelector(`script[src*="maps.googleapis.com"]`);
+      if (existingScript) {
+        // Script is already in the DOM, wait for it to load
+        if (window.google && window.google.maps && window.google.maps.Map) {
+          initializeMap();
+        } else {
+          existingScript.addEventListener('load', () => {
+            if (isMounted) {
+              // Wait a bit for Google Maps to fully initialize
+              setTimeout(() => {
+                if (isMounted) {
+                  initializeMap();
+                }
+              }, 100);
+            }
+          });
+        }
         return;
       }
 
-      const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
-      script.async = true;
-      script.defer = true;
-      script.onload = () => {
+      // Create new script element
+      scriptElement = document.createElement('script');
+      scriptElement.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&v=weekly`;
+      scriptElement.async = true;
+      scriptElement.defer = true;
+      scriptElement.onload = () => {
         if (isMounted) {
-          initializeMap();
+          // Wait for Google Maps to fully initialize
+          setTimeout(() => {
+            if (isMounted && window.google && window.google.maps && window.google.maps.Map) {
+              initializeMap();
+            }
+          }, 100);
         }
       };
-      script.onerror = () => {
-        console.error('Failed to load Google Maps API');
+      scriptElement.onerror = (error) => {
+        console.error('Failed to load Google Maps API:', error);
+        setSnackbar({
+          open: true,
+          message: 'Failed to load Google Maps. Please refresh the page.',
+          severity: 'error'
+        });
       };
-      document.head.appendChild(script);
+      document.head.appendChild(scriptElement);
     };
 
     const initializeMap = () => {
-      if (!mapRef.current || !window.google || !window.google.maps) {
-        console.error('Map container or Google Maps API not available');
+      if (!mapRef.current) {
+        console.error('Map container not available');
+        return;
+      }
+
+      if (!window.google || !window.google.maps || !window.google.maps.Map) {
+        console.error('Google Maps API not fully loaded');
         return;
       }
 
@@ -142,16 +179,30 @@ export default function Map2D() {
         // Wait for map to be fully initialized before setting state
         window.google.maps.event.addListenerOnce(googleMap, 'idle', () => {
           if (isMounted) {
-            const overlay = new GoogleMapsOverlay({
-              layers: []
-            });
-            overlay.setMap(googleMap);
-            deckOverlayRef.current = overlay;
-            setMap(googleMap);
+            try {
+              const overlay = new GoogleMapsOverlay({
+                layers: []
+              });
+              overlay.setMap(googleMap);
+              deckOverlayRef.current = overlay;
+              setMap(googleMap);
+            } catch (error) {
+              console.error('Error initializing deck.gl overlay:', error);
+              setSnackbar({
+                open: true,
+                message: 'Error initializing map layers',
+                severity: 'error'
+              });
+            }
           }
         });
       } catch (error) {
         console.error('Error initializing Google Map:', error);
+        setSnackbar({
+          open: true,
+          message: 'Error initializing map. Please refresh the page.',
+          severity: 'error'
+        });
       }
     };
 
@@ -159,6 +210,14 @@ export default function Map2D() {
 
     return () => {
       isMounted = false;
+      // Clean up the overlay
+      if (deckOverlayRef.current) {
+        try {
+          deckOverlayRef.current.setMap(null);
+        } catch (error) {
+          console.error('Error cleaning up deck overlay:', error);
+        }
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -178,13 +237,11 @@ export default function Map2D() {
       try {
         const buildingData = await findClosestBuilding(lat, lng, GOOGLE_MAPS_API_KEY);
         const solarConfig = getSolarPanelConfig(buildingData);
-        const financialData = getFinancialAnalysis(buildingData, 0);
         const buildingInfo = getBuildingInfo(buildingData);
 
         setSolarData({
           buildingData,
           solarConfig,
-          financialData,
           buildingInfo
         });
 
@@ -762,7 +819,6 @@ export default function Map2D() {
           <SolarInsightsPanel
             buildingData={solarData?.buildingData}
             solarConfig={solarData?.solarConfig}
-            financialData={solarData?.financialData}
             buildingInfo={solarData?.buildingInfo}
             loading={loadingSolar}
             error={solarError}
