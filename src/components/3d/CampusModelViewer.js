@@ -1,4 +1,4 @@
-import React, { Suspense, useState, useEffect } from 'react';
+import React, { Suspense, useState, useEffect, useRef } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls, useGLTF, Html, PerspectiveCamera } from '@react-three/drei';
 import {
@@ -19,6 +19,7 @@ import {
 } from '@mui/material';
 import * as THREE from 'three';
 import { glassStyle, glassDarkStyle } from '../../theme';
+import AttributesPanel from './AttributesPanel';
 
 import LayersIcon from '@mui/icons-material/Layers';
 import WbSunnyIcon from '@mui/icons-material/WbSunny';
@@ -40,14 +41,46 @@ function SceneBackground({ isNight }) {
   return null;
 }
 
-function CampusModel({ modelPath }) {
-  const gltf = useGLTF(modelPath);
+function CampusModel({ modelPath, onMeshClick, onClearSelectionRef }) {
+  let gltf;
+  try {
+    gltf = useGLTF(modelPath);
+  } catch (error) {
+    console.error('Error loading GLTF:', error);
+    throw error; // Re-throw to be caught by Suspense/ErrorBoundary
+  }
+
   const { camera, controls } = useThree();
   const [initialized, setInitialized] = useState(false);
+  const [selectedMesh, setSelectedMesh] = useState(null);
+  const [originalMaterial, setOriginalMaterial] = useState(null);
+
+  // Expose clearSelection function to parent
+  useEffect(() => {
+    if (onClearSelectionRef) {
+      onClearSelectionRef.current = () => {
+        if (selectedMesh && originalMaterial) {
+          selectedMesh.material = originalMaterial;
+        }
+        setSelectedMesh(null);
+        setOriginalMaterial(null);
+      };
+    }
+  }, [selectedMesh, originalMaterial, onClearSelectionRef]);
 
   useEffect(() => {
-    if (gltf && gltf.scene && !initialized) {
+    if (!gltf || !gltf.scene) {
+      console.warn('GLTF or scene not loaded yet');
+      return;
+    }
+
+    if (initialized) {
+      return;
+    }
+
+    try {
       const scene = gltf.scene;
+      console.log('Initializing 3D model...');
 
       // Calculate the bounding box of the model
       const box = new THREE.Box3().setFromObject(scene);
@@ -88,7 +121,7 @@ function CampusModel({ modelPath }) {
         controls.update();
       }
 
-      // Enhance materials and shadows
+      // Enhance materials and shadows, make meshes clickable
       scene.traverse((child) => {
         if (child.isMesh) {
           child.castShadow = true;
@@ -100,22 +133,116 @@ function CampusModel({ modelPath }) {
               child.material.opacity = 1.0;
             }
           }
+
+          // Store GLTF extras in userData for later access
+          if (child.extras) {
+            child.userData = { ...child.userData, ...child.extras };
+          }
         }
       });
 
       setInitialized(true);
+      console.log('3D model initialized successfully');
+    } catch (error) {
+      console.error('Error initializing 3D model:', error);
+      // Reset initialization flag to allow retry
+      setInitialized(false);
     }
   }, [gltf, camera, controls, initialized]);
+  // Handle mesh clicks
+  const handleClick = (event) => {
+    event.stopPropagation();
+    const mesh = event.object;
+
+    if (mesh && mesh.isMesh && onMeshClick) {
+      // Extract GLTF properties array from userData
+      const properties = mesh.userData?.properties || [];
+      const layerId = mesh.userData?.layerId;
+
+      // Check if this is a bin (Survey_points layer) - skip showing panel for bins
+      const lastProperty = properties[properties.length - 1];
+      if (lastProperty && typeof lastProperty === 'string' && lastProperty.includes('Survey_points')) {
+        // Clear any selection
+        if (selectedMesh && originalMaterial) {
+          selectedMesh.material = originalMaterial;
+        }
+        setSelectedMesh(null);
+        setOriginalMaterial(null);
+        onMeshClick(null);
+        return;
+      }
+
+      // Skip ground/terrain objects (layerId 2 or objects without proper building data)
+      // Buildings should have layerId 1 and proper name in properties[3]
+      const buildingName = properties[3];
+      if (layerId !== 1 || !buildingName || buildingName === 'NULL' || buildingName.trim() === '') {
+        // Clear any selection
+        if (selectedMesh && originalMaterial) {
+          selectedMesh.material = originalMaterial;
+        }
+        setSelectedMesh(null);
+        setOriginalMaterial(null);
+        onMeshClick(null);
+        return;
+      }
+
+      // Skip objects that already have emissive properties (pre-highlighted objects)
+      if (mesh.material && mesh.material.emissive &&
+          (mesh.material.emissive.r > 0 || mesh.material.emissive.g > 0 || mesh.material.emissive.b > 0)) {
+        // This object is already highlighted, don't apply additional highlight
+        // But still show the info panel
+      }
+
+      // Building data structure from GLTF:
+      // [0] = fid (ID)
+      // [2] = ism_way_id
+      // [3] = name (Building name)
+      // [5] = building type
+      // [8] = height
+
+      const objectData = {
+        id: properties[0] || 'N/A',
+        buildingName: buildingName || 'Unnamed',
+        buildingType: properties[5] || 'N/A',
+        height: properties[8] ? `${parseFloat(properties[8]).toFixed(2)} m` : 'N/A',
+        layerId: layerId
+      };
+
+      // Reset previous selection
+      if (selectedMesh && originalMaterial) {
+        selectedMesh.material = originalMaterial;
+      }
+
+      // Only apply highlight if object doesn't already have emissive properties
+      if (mesh.material &&
+          (!mesh.material.emissive ||
+           (mesh.material.emissive.r === 0 && mesh.material.emissive.g === 0 && mesh.material.emissive.b === 0))) {
+        // Store original material and apply highlight effect
+        const original = mesh.material.clone();
+        setOriginalMaterial(original);
+        setSelectedMesh(mesh);
+
+        // Create highlighted material
+        const highlightedMaterial = mesh.material.clone();
+        highlightedMaterial.emissive = new THREE.Color(0x4caf50); // Green glow
+        highlightedMaterial.emissiveIntensity = 0.5;
+        mesh.material = highlightedMaterial;
+      }
+
+      onMeshClick(objectData);
+    }
+  };
 
   if (!gltf || !gltf.scene) {
+    console.warn('GLTF scene not available for rendering');
     return null;
   }
 
-  return <primitive object={gltf.scene} />;
+  return <primitive object={gltf.scene} onClick={handleClick} />;
 }
 
 
-function Scene({ isNight }) {
+function Scene({ isNight, onMeshClick, onClearSelectionRef }) {
   return (
     <>
       <SceneBackground isNight={isNight} />
@@ -173,7 +300,11 @@ function Scene({ isNight }) {
           </Box>
         </Html>
       }>
-        <CampusModel modelPath="/3dmodel.gltf" />
+        <CampusModel
+          modelPath="/3dmodel.gltf"
+          onMeshClick={onMeshClick}
+          onClearSelectionRef={onClearSelectionRef}
+        />
       </Suspense>
     </>
   );
@@ -183,6 +314,20 @@ export default function CampusModelViewer({ binMetrics }) {
   const [isNight, setIsNight] = useState(false);
   const [showStats, setShowStats] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
+  const [selectedObject, setSelectedObject] = useState(null);
+  const clearSelectionRef = useRef(null);
+
+  const handleMeshClick = (objectData) => {
+    setSelectedObject(objectData);
+  };
+
+  const handleCloseAttributes = () => {
+    setSelectedObject(null);
+    // Clear the visual highlight
+    if (clearSelectionRef.current) {
+      clearSelectionRef.current();
+    }
+  };
 
 
   return (
@@ -417,9 +562,18 @@ export default function CampusModelViewer({ binMetrics }) {
             <CircularProgress />
           </Html>
         }>
-          <Scene isNight={isNight} />
+          <Scene
+            isNight={isNight}
+            onMeshClick={handleMeshClick}
+            onClearSelectionRef={clearSelectionRef}
+          />
         </Suspense>
       </Canvas>
+
+      <AttributesPanel
+        selectedObject={selectedObject}
+        onClose={handleCloseAttributes}
+      />
     </Box>
   );
 }

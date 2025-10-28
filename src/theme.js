@@ -74,11 +74,11 @@ const theme = createTheme({
 
 // Glassmorphism styles - frosted glass effect for UI panels
 export const glassStyle = {
-  background: 'rgba(255, 255, 255, 0.15)',
-  backdropFilter: 'blur(10px)',
-  WebkitBackdropFilter: 'blur(10px)',
-  border: '1px solid rgba(255, 255, 255, 0.2)',
-  boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.15)',
+  background: 'rgba(255, 255, 255, 0.85)',
+  backdropFilter: 'blur(12px)',
+  WebkitBackdropFilter: 'blur(12px)',
+  border: '1px solid rgba(255, 255, 255, 0.3)',
+  boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.2)',
 };
 
 // Dark variant for overlays
@@ -92,9 +92,9 @@ export const glassDarkStyle = {
 
 // Hover state with lift effect
 export const glassHoverStyle = {
-  background: 'rgba(255, 255, 255, 0.25)',
+  background: 'rgba(255, 255, 255, 0.95)',
   transform: 'translateY(-2px)',
-  boxShadow: '0 12px 40px 0 rgba(31, 38, 135, 0.25)',
+  boxShadow: '0 12px 40px 0 rgba(31, 38, 135, 0.3)',
 };
 
 export default theme;
