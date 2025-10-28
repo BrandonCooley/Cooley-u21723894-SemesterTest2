@@ -49,36 +49,46 @@ function CampusModel({ modelPath }) {
     if (gltf && gltf.scene && !initialized) {
       const scene = gltf.scene;
 
+      // Calculate the bounding box of the model
       const box = new THREE.Box3().setFromObject(scene);
-      const min = box.min;
+      const center = box.getCenter(new THREE.Vector3());
 
-      const yOffset = -min.y;
-      scene.position.y = yOffset;
+      // Center the model at world origin (0, 0, 0)
+      // Subtract the center to move the model's center to (0, 0, 0)
+      scene.position.x = -center.x;
+      scene.position.y = -box.min.y; // Place bottom of model on ground plane
+      scene.position.z = -center.z;
 
-      const newBox = new THREE.Box3().setFromObject(scene);
-      const newCenter = newBox.getCenter(new THREE.Vector3());
-      const newSize = newBox.getSize(new THREE.Vector3());
+      // Recalculate after centering
+      const centeredBox = new THREE.Box3().setFromObject(scene);
+      const centeredSize = centeredBox.getSize(new THREE.Vector3());
+      const maxDim = Math.max(centeredSize.x, centeredSize.y, centeredSize.z);
 
-      // Auto-position camera to frame entire model
-      const maxDim = Math.max(newSize.x, newSize.y, newSize.z);
+      // Calculate optimal camera distance to fit entire model
       const fov = camera.fov * (Math.PI / 180);
-      const distance = Math.abs(maxDim / Math.sin(fov / 2)) * 1.2;
+      const distance = Math.abs(maxDim / Math.sin(fov / 2)) * 1.8;
 
-      const newCameraPos = {
-        x: newCenter.x + distance * 0.5,
-        y: newCenter.y + distance * 0.8,
-        z: newCenter.z + distance * 0.5
-      };
+      // Position camera at an angle for good isometric view
+      const cameraHeight = distance * 0.7;
+      const cameraDistance = distance * 0.8;
 
-      camera.position.set(newCameraPos.x, newCameraPos.y, newCameraPos.z);
-      camera.lookAt(newCenter);
+      camera.position.set(
+        cameraDistance * 0.7,
+        cameraHeight,
+        cameraDistance * 0.7
+      );
+      camera.lookAt(0, centeredSize.y * 0.3, 0); // Look slightly above ground
       camera.updateProjectionMatrix();
 
+      // Update orbit controls
       if (controls) {
-        controls.target.copy(newCenter);
+        controls.target.set(0, centeredSize.y * 0.3, 0);
+        controls.minDistance = maxDim * 0.3;
+        controls.maxDistance = maxDim * 4;
         controls.update();
       }
 
+      // Enhance materials and shadows
       scene.traverse((child) => {
         if (child.isMesh) {
           child.castShadow = true;
@@ -110,16 +120,18 @@ function Scene({ isNight }) {
     <>
       <SceneBackground isNight={isNight} />
 
-      <PerspectiveCamera makeDefault position={[0, 100, 200]} fov={75} />
+      <PerspectiveCamera makeDefault position={[100, 100, 100]} fov={60} />
       <OrbitControls
         enablePan={true}
         enableZoom={true}
         enableRotate={true}
-        dampingFactor={0.05}
+        dampingFactor={0.08}
         enableDamping={true}
-        maxPolarAngle={Math.PI / 2}
-        minDistance={50}
-        maxDistance={800}
+        maxPolarAngle={Math.PI / 2.1}
+        minDistance={10}
+        maxDistance={1000}
+        target={[0, 0, 0]}
+        screenSpacePanning={true}
       />
 
       <ambientLight intensity={isNight ? 0.1 : 0.3} />
