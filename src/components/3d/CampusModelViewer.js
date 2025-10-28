@@ -15,11 +15,15 @@ import {
   DialogActions,
   Button,
   LinearProgress,
-  Zoom
+  Zoom,
+  Autocomplete,
+  TextField
 } from '@mui/material';
 import * as THREE from 'three';
 import { glassStyle, glassDarkStyle } from '../../theme';
 import AttributesPanel from './AttributesPanel';
+import BinPanel from './BinPanel';
+import { binLocations } from '../../services/sustainabilityData';
 
 import LayersIcon from '@mui/icons-material/Layers';
 import WbSunnyIcon from '@mui/icons-material/WbSunny';
@@ -28,6 +32,8 @@ import TuneIcon from '@mui/icons-material/Tune';
 import MapIcon from '@mui/icons-material/Map';
 import InfoIcon from '@mui/icons-material/Info';
 import CloseIcon from '@mui/icons-material/Close';
+import SearchIcon from '@mui/icons-material/Search';
+import SchoolIcon from '@mui/icons-material/School';
 
 function SceneBackground({ isNight }) {
   const { scene } = useThree();
@@ -41,7 +47,7 @@ function SceneBackground({ isNight }) {
   return null;
 }
 
-function CampusModel({ modelPath, onMeshClick, onClearSelectionRef }) {
+function CampusModel({ modelPath, onMeshClick, onBinClick, onClearSelectionRef, onBuildingsExtracted }) {
   let gltf;
   try {
     gltf = useGLTF(modelPath);
@@ -122,6 +128,7 @@ function CampusModel({ modelPath, onMeshClick, onClearSelectionRef }) {
       }
 
       // Enhance materials and shadows, make meshes clickable
+      const buildingList = [];
       scene.traverse((child) => {
         if (child.isMesh) {
           child.castShadow = true;
@@ -138,8 +145,28 @@ function CampusModel({ modelPath, onMeshClick, onClearSelectionRef }) {
           if (child.extras) {
             child.userData = { ...child.userData, ...child.extras };
           }
+
+          // Extract buildings for search functionality
+          const properties = child.userData?.properties || [];
+          const layerId = child.userData?.layerId;
+          const buildingName = properties[3];
+
+          // Only include valid buildings (layerId 1 with proper names)
+          if (layerId === 1 && buildingName && buildingName !== 'NULL' && buildingName.trim() !== '') {
+            buildingList.push({
+              id: properties[0] || buildingList.length + 1,
+              name: buildingName,
+              mesh: child
+            });
+          }
         }
       });
+
+      // Pass building list to parent component
+      if (onBuildingsExtracted && buildingList.length > 0) {
+        onBuildingsExtracted(buildingList);
+        console.log(`Extracted ${buildingList.length} buildings for search`);
+      }
 
       setInitialized(true);
       console.log('3D model initialized successfully');
@@ -154,82 +181,111 @@ function CampusModel({ modelPath, onMeshClick, onClearSelectionRef }) {
     event.stopPropagation();
     const mesh = event.object;
 
-    if (mesh && mesh.isMesh && onMeshClick) {
+    if (mesh && mesh.isMesh) {
       // Extract GLTF properties array from userData
       const properties = mesh.userData?.properties || [];
       const layerId = mesh.userData?.layerId;
 
-      // Check if this is a bin (Survey_points layer) - skip showing panel for bins
+      // Check if this is a bin (Survey_points layer)
       const lastProperty = properties[properties.length - 1];
-      if (lastProperty && typeof lastProperty === 'string' && lastProperty.includes('Survey_points')) {
-        // Clear any selection
+      const isBin = lastProperty && typeof lastProperty === 'string' && lastProperty.includes('Survey_points');
+
+      if (isBin && onBinClick) {
+        // Handle bin click
+        // Extract bin ID from properties (first property is usually the ID)
+        const binId = parseInt(properties[0]) || null;
+
+        // Find matching bin data from sustainabilityData
+        const binData = binLocations.find(bin => bin.id === binId) || {
+          id: binId || 'Unknown',
+          type: 'general',
+          fillLevel: 0,
+          position: [0, 0, 0],
+          lastEmptied: 'N/A'
+        };
+
+        // Reset previous selection
         if (selectedMesh && originalMaterial) {
           selectedMesh.material = originalMaterial;
         }
-        setSelectedMesh(null);
-        setOriginalMaterial(null);
+
+        // Apply blue highlight for bins
+        if (mesh.material &&
+            (!mesh.material.emissive ||
+             (mesh.material.emissive.r === 0 && mesh.material.emissive.g === 0 && mesh.material.emissive.b === 0))) {
+          const original = mesh.material.clone();
+          setOriginalMaterial(original);
+          setSelectedMesh(mesh);
+
+          // Create highlighted material with blue glow
+          const highlightedMaterial = mesh.material.clone();
+          highlightedMaterial.emissive = new THREE.Color(0x2196F3); // Blue glow
+          highlightedMaterial.emissiveIntensity = 0.5;
+          mesh.material = highlightedMaterial;
+        }
+
+        // Clear building selection and show bin panel
         onMeshClick(null);
+        onBinClick(binData);
         return;
       }
 
-      // Skip ground/terrain objects (layerId 2 or objects without proper building data)
-      // Buildings should have layerId 1 and proper name in properties[3]
-      const buildingName = properties[3];
-      if (layerId !== 1 || !buildingName || buildingName === 'NULL' || buildingName.trim() === '') {
-        // Clear any selection
+      // Handle building clicks
+      if (onMeshClick) {
+        // Skip ground/terrain objects (layerId 2 or objects without proper building data)
+        // Buildings should have layerId 1 and proper name in properties[3]
+        const buildingName = properties[3];
+        if (layerId !== 1 || !buildingName || buildingName === 'NULL' || buildingName.trim() === '') {
+          // Clear any selection
+          if (selectedMesh && originalMaterial) {
+            selectedMesh.material = originalMaterial;
+          }
+          setSelectedMesh(null);
+          setOriginalMaterial(null);
+          onMeshClick(null);
+          if (onBinClick) onBinClick(null);
+          return;
+        }
+
+        // Building data structure from GLTF:
+        // [0] = fid (ID)
+        // [2] = ism_way_id
+        // [3] = name (Building name)
+        // [5] = building type
+        // [8] = height
+
+        const objectData = {
+          id: properties[0] || 'N/A',
+          buildingName: buildingName || 'Unnamed',
+          buildingType: properties[5] || 'N/A',
+          height: properties[8] ? `${parseFloat(properties[8]).toFixed(2)} m` : 'N/A',
+          layerId: layerId
+        };
+
+        // Reset previous selection
         if (selectedMesh && originalMaterial) {
           selectedMesh.material = originalMaterial;
         }
-        setSelectedMesh(null);
-        setOriginalMaterial(null);
-        onMeshClick(null);
-        return;
+
+        // Apply green highlight for buildings
+        if (mesh.material &&
+            (!mesh.material.emissive ||
+             (mesh.material.emissive.r === 0 && mesh.material.emissive.g === 0 && mesh.material.emissive.b === 0))) {
+          const original = mesh.material.clone();
+          setOriginalMaterial(original);
+          setSelectedMesh(mesh);
+
+          // Create highlighted material with green glow
+          const highlightedMaterial = mesh.material.clone();
+          highlightedMaterial.emissive = new THREE.Color(0x4caf50); // Green glow
+          highlightedMaterial.emissiveIntensity = 0.5;
+          mesh.material = highlightedMaterial;
+        }
+
+        // Clear bin selection and show building panel
+        if (onBinClick) onBinClick(null);
+        onMeshClick(objectData);
       }
-
-      // Skip objects that already have emissive properties (pre-highlighted objects)
-      if (mesh.material && mesh.material.emissive &&
-          (mesh.material.emissive.r > 0 || mesh.material.emissive.g > 0 || mesh.material.emissive.b > 0)) {
-        // This object is already highlighted, don't apply additional highlight
-        // But still show the info panel
-      }
-
-      // Building data structure from GLTF:
-      // [0] = fid (ID)
-      // [2] = ism_way_id
-      // [3] = name (Building name)
-      // [5] = building type
-      // [8] = height
-
-      const objectData = {
-        id: properties[0] || 'N/A',
-        buildingName: buildingName || 'Unnamed',
-        buildingType: properties[5] || 'N/A',
-        height: properties[8] ? `${parseFloat(properties[8]).toFixed(2)} m` : 'N/A',
-        layerId: layerId
-      };
-
-      // Reset previous selection
-      if (selectedMesh && originalMaterial) {
-        selectedMesh.material = originalMaterial;
-      }
-
-      // Only apply highlight if object doesn't already have emissive properties
-      if (mesh.material &&
-          (!mesh.material.emissive ||
-           (mesh.material.emissive.r === 0 && mesh.material.emissive.g === 0 && mesh.material.emissive.b === 0))) {
-        // Store original material and apply highlight effect
-        const original = mesh.material.clone();
-        setOriginalMaterial(original);
-        setSelectedMesh(mesh);
-
-        // Create highlighted material
-        const highlightedMaterial = mesh.material.clone();
-        highlightedMaterial.emissive = new THREE.Color(0x4caf50); // Green glow
-        highlightedMaterial.emissiveIntensity = 0.5;
-        mesh.material = highlightedMaterial;
-      }
-
-      onMeshClick(objectData);
     }
   };
 
@@ -242,7 +298,7 @@ function CampusModel({ modelPath, onMeshClick, onClearSelectionRef }) {
 }
 
 
-function Scene({ isNight, onMeshClick, onClearSelectionRef }) {
+function Scene({ isNight, onMeshClick, onBinClick, onClearSelectionRef, onBuildingsExtracted }) {
   return (
     <>
       <SceneBackground isNight={isNight} />
@@ -303,7 +359,9 @@ function Scene({ isNight, onMeshClick, onClearSelectionRef }) {
         <CampusModel
           modelPath="/3dmodel.gltf"
           onMeshClick={onMeshClick}
+          onBinClick={onBinClick}
           onClearSelectionRef={onClearSelectionRef}
+          onBuildingsExtracted={onBuildingsExtracted}
         />
       </Suspense>
     </>
@@ -315,10 +373,21 @@ export default function CampusModelViewer({ binMetrics }) {
   const [showStats, setShowStats] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [selectedObject, setSelectedObject] = useState(null);
+  const [selectedBin, setSelectedBin] = useState(null);
+  const [buildings, setBuildings] = useState([]);
+  const [searchValue, setSearchValue] = useState(null);
   const clearSelectionRef = useRef(null);
+  const cameraRef = useRef(null);
+  const controlsRef = useRef(null);
 
   const handleMeshClick = (objectData) => {
     setSelectedObject(objectData);
+    setSelectedBin(null); // Close bin panel when building is clicked
+  };
+
+  const handleBinClick = (binData) => {
+    setSelectedBin(binData);
+    setSelectedObject(null); // Close building panel when bin is clicked
   };
 
   const handleCloseAttributes = () => {
@@ -329,14 +398,121 @@ export default function CampusModelViewer({ binMetrics }) {
     }
   };
 
+  const handleCloseBin = () => {
+    setSelectedBin(null);
+    // Clear the visual highlight
+    if (clearSelectionRef.current) {
+      clearSelectionRef.current();
+    }
+  };
+
+  const handleBuildingsExtracted = (buildingList) => {
+    setBuildings(buildingList);
+  };
+
+  const handleBuildingSearch = (event, building) => {
+    if (!building) {
+      setSearchValue(null);
+      return;
+    }
+
+    setSearchValue(building);
+
+    // Get the building's mesh and position
+    const mesh = building.mesh;
+    if (!mesh) return;
+
+    // Get world position of the building
+    const worldPosition = new THREE.Vector3();
+    mesh.getWorldPosition(worldPosition);
+
+    // Extract building data
+    const properties = mesh.userData?.properties || [];
+    const objectData = {
+      id: properties[0] || 'N/A',
+      buildingName: properties[3] || building.name,
+      buildingType: properties[5] || 'N/A',
+      height: properties[8] ? `${parseFloat(properties[8]).toFixed(2)} m` : 'N/A',
+      layerId: mesh.userData?.layerId
+    };
+
+    // Show the attributes panel and trigger highlight
+    handleMeshClick(objectData);
+
+    console.log(`Selected building: ${building.name} at position`, worldPosition);
+  };
+
 
   return (
     <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>
+      {/* Header with University Title and Search */}
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 1000,
+          ...glassStyle,
+          borderRadius: 0,
+          borderBottom: '2px solid rgba(46, 125, 50, 0.3)',
+          py: 1.5,
+          px: 3,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 3,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 'fit-content' }}>
+          <SchoolIcon fontSize="medium" color="primary" />
+          <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1.25rem', color: 'primary.main' }}>
+            University of Pretoria
+          </Typography>
+        </Box>
+
+        <Autocomplete
+          options={buildings}
+          getOptionLabel={(option) => option.name}
+          value={searchValue}
+          onChange={handleBuildingSearch}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              placeholder="Search buildings..."
+              size="small"
+              InputProps={{
+                ...params.InputProps,
+                startAdornment: (
+                  <>
+                    <SearchIcon fontSize="small" sx={{ color: 'text.secondary', mr: 0.5 }} />
+                    {params.InputProps.startAdornment}
+                  </>
+                ),
+              }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  backgroundColor: 'rgba(255, 255, 255, 0.7)',
+                  borderRadius: 2,
+                }
+              }}
+            />
+          )}
+          sx={{
+            width: '100%',
+            maxWidth: 400,
+            minWidth: 250
+          }}
+          size="small"
+        />
+      </Box>
+
       <Zoom in timeout={500}>
         <Box
           sx={{
             position: 'absolute',
-            top: 16,
+            top: 72,
             left: 16,
             zIndex: 1000,
             ...glassStyle,
@@ -365,7 +541,7 @@ export default function CampusModelViewer({ binMetrics }) {
           <Box
             sx={{
               position: 'absolute',
-              top: 16,
+              top: 72,
               right: 16,
               zIndex: 1000,
               ...glassStyle,
@@ -565,7 +741,9 @@ export default function CampusModelViewer({ binMetrics }) {
           <Scene
             isNight={isNight}
             onMeshClick={handleMeshClick}
+            onBinClick={handleBinClick}
             onClearSelectionRef={clearSelectionRef}
+            onBuildingsExtracted={handleBuildingsExtracted}
           />
         </Suspense>
       </Canvas>
@@ -573,6 +751,11 @@ export default function CampusModelViewer({ binMetrics }) {
       <AttributesPanel
         selectedObject={selectedObject}
         onClose={handleCloseAttributes}
+      />
+
+      <BinPanel
+        selectedBin={selectedBin}
+        onClose={handleCloseBin}
       />
     </Box>
   );

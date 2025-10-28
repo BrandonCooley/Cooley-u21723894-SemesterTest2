@@ -1,18 +1,59 @@
 // Campus Sustainability Data Service
 // All the data and calculations for the sustainability dashboard
 
+// Helper function to generate random bin data
+function generateBinData() {
+  const bins = [];
+  const binTypes = ['recycling', 'compost', 'general'];
+
+  // Generate random date within the last 7 days
+  const getRandomDate = () => {
+    const today = new Date('2025-09-30');
+    const daysAgo = Math.floor(Math.random() * 7);
+    const date = new Date(today);
+    date.setDate(date.getDate() - daysAgo);
+    return date.toISOString().split('T')[0];
+  };
+
+  // Generate random position within campus bounds
+  const getRandomPosition = () => {
+    const x = Math.floor(Math.random() * 200) - 100; // -100 to 100
+    const y = 30; // Always at ground level + height
+    const z = Math.floor(Math.random() * 200) - 100; // -100 to 100
+    return [x, y, z];
+  };
+
+  // Keep the original 8 bins with their data
+  const originalBins = [
+    { id: 1, position: [50, 30, 0], type: 'recycling', fillLevel: 45, lastEmptied: '2025-09-28' },
+    { id: 2, position: [-30, 30, 30], type: 'compost', fillLevel: 70, lastEmptied: '2025-09-27' },
+    { id: 3, position: [0, 30, -20], type: 'general', fillLevel: 80, lastEmptied: '2025-09-29' },
+    { id: 4, position: [70, 30, -50], type: 'recycling', fillLevel: 30, lastEmptied: '2025-09-29' },
+    { id: 5, position: [-60, 30, -30], type: 'compost', fillLevel: 55, lastEmptied: '2025-09-28' },
+    { id: 6, position: [20, 30, 60], type: 'general', fillLevel: 65, lastEmptied: '2025-09-28' },
+    { id: 7, position: [-40, 30, 70], type: 'recycling', fillLevel: 20, lastEmptied: '2025-09-30' },
+    { id: 8, position: [80, 30, 20], type: 'general', fillLevel: 90, lastEmptied: '2025-09-26' },
+  ];
+
+  bins.push(...originalBins);
+
+  // Generate 157 more bins (165 total)
+  for (let i = 9; i <= 165; i++) {
+    bins.push({
+      id: i,
+      position: getRandomPosition(),
+      type: binTypes[Math.floor(Math.random() * binTypes.length)],
+      fillLevel: Math.floor(Math.random() * 101), // 0-100%
+      lastEmptied: getRandomDate()
+    });
+  }
+
+  return bins;
+}
+
 // Waste bin locations on the 3D map
 // (x, y, z) coordinates - Y is raised to 30 so bins show above the ground model
-export const binLocations = [
-  { id: 1, position: [50, 30, 0], type: 'recycling', fillLevel: 45, lastEmptied: '2025-09-28' },
-  { id: 2, position: [-30, 30, 30], type: 'compost', fillLevel: 70, lastEmptied: '2025-09-27' },
-  { id: 3, position: [0, 30, -20], type: 'general', fillLevel: 80, lastEmptied: '2025-09-29' },
-  { id: 4, position: [70, 30, -50], type: 'recycling', fillLevel: 30, lastEmptied: '2025-09-29' },
-  { id: 5, position: [-60, 30, -30], type: 'compost', fillLevel: 55, lastEmptied: '2025-09-28' },
-  { id: 6, position: [20, 30, 60], type: 'general', fillLevel: 65, lastEmptied: '2025-09-28' },
-  { id: 7, position: [-40, 30, 70], type: 'recycling', fillLevel: 20, lastEmptied: '2025-09-30' },
-  { id: 8, position: [80, 30, 20], type: 'general', fillLevel: 90, lastEmptied: '2025-09-26' },
-];
+export const binLocations = generateBinData();
 
 // Campus walkways - arrays of points that connect to form paths
 // Y is raised to 15 so walkways show above the ground
