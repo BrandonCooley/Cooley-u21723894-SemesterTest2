@@ -21,7 +21,7 @@ import {
 } from '@mui/material';
 import * as THREE from 'three';
 import { glassStyle, glassDarkStyle } from '../../theme';
-import AttributesPanel from './AttributesPanel';
+import DataPanel from './DataPanel';
 import BinPanel from './BinPanel';
 import { binLocations } from '../../services/sustainabilityData';
 
@@ -748,7 +748,7 @@ export default function CampusModelViewer({ binMetrics }) {
         </Suspense>
       </Canvas>
 
-      <AttributesPanel
+      <DataPanel
         selectedObject={selectedObject}
         onClose={handleCloseAttributes}
       />
